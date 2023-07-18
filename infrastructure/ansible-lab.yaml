@@ -1,0 +1,95 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: myWizard DevOps Multi-Tenant Bitbucket - NFS server
+
+Parameters:
+  User:
+    Description: User for instance tagging
+    Type: string
+  CreateLC:
+    Description: Create launch tempaplate?
+    Type: String
+    Default: false
+
+Conditions:
+  ToCreateLC: !Equals [!Ref CreateLC, true]
+
+Resources:
+  AnsibleLC:
+    Type: AWS::EC2::LaunchTemplate
+    Contition: ToCreateLC
+    Properties:
+      LaunchTemplateName: sgt-ansible-2023-frontend
+      LauncTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              DeleteOnTermination: true
+              VolumeSize: 8
+              VolumeType: gp3
+              Encrypted: true
+              KmsKeyId: arn:aws:kms:eu-west-1:597765856364:key/85811a60-bc7b-4147-990d-b62afbfd5b46
+        IamInstanceProfile:
+          Name: arn:aws:iam::597765856364:instance-profile/ssm_role
+        ImageId: ami-0f56955469757e5aa
+        InstanceType: t3.medium
+        KeyName: sgt-agris
+        SecurityGroupIds:
+          - sg-0bc7761ef1baeb620
+        TagSpecifications:
+          - ResourceType: network-interface
+            Tags:
+              - Key: Name
+                Value: !Ref User
+          - ResourceType: volume
+            Tags:
+              - Key: Name
+                Value: !Ref User
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Ref User
+        UserData:
+          Fn::Base64: !Sub |
+            #!/usr/bin/env bash
+            cat > /etc/instance-tags <<EOF
+            User="${User}"
+            EOF
+            source /etc/instance-tags
+            export IP=$(hostname -i)
+      TagSpecifications:
+        ResourceType: launch-template
+          Tags:
+            - Key: Name
+              Value: !Ref User
+  
+  FrontEndEC2_0:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate: !Ref AnsibleLC
+      PropagateTagsToVolumeOnCreation: true
+
+  BackendEC2_0:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate: !Ref AnsibleLC
+      PropagateTagsToVolumeOnCreation: true
+
+  BackendEC2_1:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate: !Ref AnsibleLC
+      PropagateTagsToVolumeOnCreation: true
+
+Outputs:
+  UserName:
+    Description: Stack creates instances for user
+    Value: !Ref User
+  FrontEnd0:
+    Description: Frontend instance for user
+    Value: !Ref FrontEndEC2_0
+  BackEnd0:
+    Description: Backend instance nr 1 for user
+    Value: !Ref BackendEC2_0
+  BackEnd1:
+    Description: Backend instance nr 2 for user
+    Value: !Ref BackendEC2_1
